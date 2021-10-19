@@ -64,8 +64,14 @@ export async function findScheduleInboxAvailability() {
 
 	const vcalendarComp = new ICAL.Component(parsedIcal)
 	const vavailabilityComp = vcalendarComp.getFirstSubcomponent('vavailability')
-	const availableComps = vavailabilityComp.getAllSubcomponents('available')
 
+	let timezoneId
+	const timezoneComp = vcalendarComp.getFirstSubcomponent('vtimezone')
+	if (timezoneComp) {
+		timezoneId = timezoneComp.getFirstProperty('tzid').getFirstValue()
+	}
+
+	const availableComps = vavailabilityComp.getAllSubcomponents('available')
 	// Combine all AVAILABLE blocks into a week of slots
 	const slots = getEmptySlots()
 	availableComps.forEach((availableComp) => {
@@ -90,6 +96,7 @@ export async function findScheduleInboxAvailability() {
 
 	return {
 		slots,
+		timezoneId,
 	}
 }
 
@@ -99,13 +106,20 @@ export async function saveScheduleInboxAvailability(slots, timezoneId) {
 		day: dayId,
 	})))]
 
+	const vcalendarComp = new ICAL.Component('vcalendar')
+
+	// Store time zone info
+	const timezoneComp = new ICAL.Component('vtimezone')
+	timezoneComp.addPropertyWithValue('tzid', timezoneId)
+	vcalendarComp.addSubcomponent(timezoneComp)
+
+	// Store availability info
 	const vavailabilityComp = new ICAL.Component('vavailability')
 	// TODO: deduplicate slots that occur on more than one day
 	all.map(slot => {
 		const availableComp = new ICAL.Component('available')
 
 		// Define DTSTART and DTEND
-		// TODO: tz? moment.tz(dateTime, timezone).toDate()
 		const startTimeProp = availableComp.addPropertyWithValue('dtstart', ICAL.Time.fromJSDate(slot.start, false))
 		startTimeProp.setParameter('tzid', timezoneId)
 		const endTimeProp = availableComp.addPropertyWithValue('dtend', ICAL.Time.fromJSDate(slot.end, false))
@@ -125,7 +139,6 @@ export async function saveScheduleInboxAvailability(slots, timezoneId) {
 		return availableComp
 	}).map(vavailabilityComp.addSubcomponent.bind(vavailabilityComp))
 
-	const vcalendarComp = new ICAL.Component('vcalendar')
 	vcalendarComp.addSubcomponent(vavailabilityComp)
 	logger.debug('New availability ical created', {
 		asObject: vcalendarComp,
