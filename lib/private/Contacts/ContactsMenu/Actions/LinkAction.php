@@ -87,10 +87,7 @@ class LinkAction implements ILinkAction {
 		return $this->href;
 	}
 
-	/**
-	 * @return array
-	 */
-	public function jsonSerialize() {
+	public function jsonSerialize(): array {
 		return [
 			'title' => $this->name,
 			'icon' => $this->icon,
